@@ -55,10 +55,10 @@ That's it. Both machines must be on the same local network (WiFi/LAN).
 
 If the two PCs are on different networks (e.g., home WiFi vs mobile hotspot), you can use the built-in **Internet Mode**.
 
-1. On **PC1 (Camera)**, check the box: **"🌐 Make accessible over the Internet"** before clicking Start.
+1. On **PC1 (Camera)**, check the box: **"🌐 Internet Mode (free Pinggy tunnel)"** before clicking Start.
 2. The app will automatically create a secure, free public link using Pinggy.
 3. Share the generated Internet address with the viewer on **PC2**.
-4. The viewer types in that address and connects.
+4. The viewer copies that entire address (e.g., `abc-123.pinggy-free.link:12345`) directly into the **Address** box and connects. The app automatically splits the host and port!
 
 > **Note on Free Tunnels**: The Pinggy free tier tunnel expires after 60 minutes and the address changes each time you start it. If it expires while streaming, you will be prompted to restart the link.
 
@@ -141,8 +141,9 @@ python receiver.py --relay-host VPS_IP --relay-port 9000 --stream-name mystream
 | `relay_server.py` | VPS relay server (CLI mode only) |
 | `sender.py` | CLI sender (no GUI) |
 | `receiver.py` | CLI receiver (no GUI) |
+| `pinggy_tunnel.py` | Pinggy background TCP tunnel manager |
 | `install.sh` | One-time installer script |
-| `requirements.txt` | `opencv-python`, `Pillow` |
+| `requirements.txt` | `opencv-python`, `Pillow`, `pexpect` |
 
 ---
 
@@ -197,7 +198,7 @@ Adding TLS or an application-layer cipher only requires changes at those lines.
 
 | Limitation | Notes |
 |-----------|-------|
-| **Same-network only** (app.py) | Direct P2P by design — for internet streaming, use CLI relay mode (see above) |
+| **Same-network only** (app.py) | Direct P2P by default — check the "Internet Mode" box to seamlessly stream across different networks via Pinggy. |
 | **Bandwidth** | JPEG-per-frame at 20 fps / 720p ≈ 3–8 Mbps; H.264 would be 5–20× smaller |
 | **Latency display** | Accurate only when both PCs are NTP-synced; negative values mean clock skew |
 | **One sender per session** | Multiple viewers are supported |
