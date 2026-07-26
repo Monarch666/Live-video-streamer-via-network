@@ -53,10 +53,16 @@ That's it. Both machines must be on the same local network (WiFi/LAN).
 
 ## For Different Networks (Internet)
 
-If the two PCs are on different networks (e.g. home WiFi vs mobile hotspot):
+If the two PCs are on different networks (e.g., home WiFi vs mobile hotspot), you can use the built-in **Internet Mode**.
 
-- **PC1** needs a **public IP** or **port forwarding** on port 9000
-- OR: use the 3-component relay system (see [CLI mode](#cli-mode-3-component-relay) below)
+1. On **PC1 (Camera)**, check the box: **"🌐 Make accessible over the Internet"** before clicking Start.
+2. The app will automatically create a secure, free public link using Pinggy.
+3. Share the generated Internet address with the viewer on **PC2**.
+4. The viewer types in that address and connects.
+
+> **Note on Free Tunnels**: The Pinggy free tier tunnel expires after 60 minutes and the address changes each time you start it. If it expires while streaming, you will be prompted to restart the link.
+
+*Alternatively, for permanent public addresses or custom domains, you can use the 3-component relay system (see [CLI mode](#cli-mode-3-component-relay) below).*
 
 ---
 

@@ -45,6 +45,8 @@ from protocol import (
     MSG_VIDEO_FRAME, MSG_PING, MSG_PONG,
     WRITE_BUFFER_LIMIT,
 )
+from pinggy_tunnel import PinggyTunnel
+
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -775,6 +777,7 @@ class SenderScreen(tk.Frame):
         super().__init__(app, bg=BG)
         self._app = app
         self._backend: Optional[SenderBackend] = None
+        self._tunnel: Optional[PinggyTunnel] = None
         self._running = False
 
         # Stats
@@ -868,6 +871,25 @@ class SenderScreen(tk.Frame):
         )
         copy_btn.pack(pady=(10, 0))
         self._copy_btn = copy_btn
+        
+        self._public_address = None
+        
+        self._tunnel_banner_frame = tk.Frame(addr_frame, bg=CARD)
+        self._tunnel_banner_frame.pack(fill=tk.X, pady=(10, 0))
+        self._tunnel_banner_lbl = tk.Label(
+            self._tunnel_banner_frame, text="",
+            font=_font(10), fg=FG2, bg=CARD
+        )
+        self._tunnel_banner_lbl.pack()
+        self._tunnel_banner_lbl.pack_forget() # hidden initially
+        
+        self._restart_tunnel_btn = RoundedButton(
+            self._tunnel_banner_frame, text="🔄 Restart Internet Link",
+            command=self._restart_tunnel,
+            bg_color=PANEL, hover_color=BORDER, fg_color=FG,
+            width=200, height=36, radius=8, font_spec=_font(11),
+        )
+        # hidden initially
 
         _sep(parent, color=BORDER, fill=tk.X, pady=(24, 0))
 
@@ -907,10 +929,21 @@ class SenderScreen(tk.Frame):
         )
         cam_entry.pack(side=tk.LEFT, padx=(10, 0))
 
+        self._internet_mode_var = tk.BooleanVar(value=False)
+        self._internet_chk = tk.Checkbutton(
+            parent, text="🌐 Internet Mode (free Pinggy tunnel)",
+            variable=self._internet_mode_var,
+            bg=CARD, fg=FG, selectcolor=BG, activebackground=CARD, activeforeground=FG,
+            font=_font(9), highlightthickness=0, bd=0,
+            wraplength=230, justify=tk.LEFT
+        )
+        self._internet_chk.pack(pady=(16, 0), padx=20, anchor=tk.W)
+
         self._start_btn = RoundedButton(
             parent, text="▶  Start",
             command=self._start_streaming,
             bg_color=GREEN, hover_color="#56d364", fg_color="#ffffff",
+
             width=200, height=40, radius=10, font_spec=_font(12, "bold"),
         )
         self._start_btn.pack(pady=(18, 0))
@@ -957,20 +990,50 @@ class SenderScreen(tk.Frame):
         self._status_lbl.configure(text="Opening camera…")
         self._poll_status()
         self._poll_preview()
+        
+        if self._internet_mode_var.get():
+            self._status_lbl.configure(text="Streaming — opening internet tunnel…")
+            self._tunnel_banner_lbl.configure(text="🌐 Opening internet tunnel…", fg=FG2)
+            self._tunnel_banner_lbl.pack(pady=5)
+            self._internet_chk.configure(state=tk.DISABLED)
+            
+            self._tunnel = PinggyTunnel(local_port=port)
+            self._tunnel.start()
 
     def _copy_address(self) -> None:
-        port = self._port_var.get()
-        addr = f"{self._local_ip}:{port}"
+        if self._public_address:
+            addr = self._public_address
+        else:
+            port = self._port_var.get()
+            addr = f"{self._local_ip}:{port}"
+            
         self._app.clipboard_clear()
         self._app.clipboard_append(addr)
+        
+        btn_text = "📋  Copy Internet Address" if self._public_address else "📋  Copy LAN Address"
+        if not self._internet_mode_var.get():
+            btn_text = "📋  Copy Address"
+            
         self._copy_btn.configure_text("✓  Copied!")
-        self.after(2000, lambda: self._copy_btn.configure_text("📋  Copy Address"))
+        self.after(2000, lambda: self._copy_btn.configure_text(btn_text))
+
+    def _restart_tunnel(self) -> None:
+        self._restart_tunnel_btn.pack_forget()
+        self._tunnel_banner_lbl.configure(text="🌐 Opening internet tunnel…", fg=FG2)
+        self._tunnel_banner_lbl.pack(pady=5)
+        
+        port = int(self._port_var.get())
+        self._tunnel = PinggyTunnel(local_port=port)
+        self._tunnel.start()
 
     def _on_back(self) -> None:
         self._running = False
         if self._backend:
             self._backend.stop()
             self._backend = None
+        if self._tunnel:
+            self._tunnel.stop()
+            self._tunnel = None
         self._app.show_home()
 
     # ── Polling loops ──────────────────────────────────────────────
@@ -1010,7 +1073,59 @@ class SenderScreen(tk.Frame):
                     self._fps_val.configure(text=f"{value}")
         except queue.Empty:
             pass
+            
+        # Poll tunnel queue
+        if self._tunnel:
+            try:
+                while True:
+                    tevent, tvalue = self._tunnel.status_queue.get_nowait()
+                    if tevent == "connecting":
+                        pass
+                    elif tevent == "connected":
+                        host, tport = tvalue
+                        self._public_address = f"{host}:{tport}"
+                        
+                        self._ip_lbl.configure(text=host, font=(_SYSTEM_FONT, 13, "bold"))
+                        self._port_lbl.configure(text=f"Port: {tport}\nLAN: {self._local_ip}:{self._port_var.get()}")
+                        self._copy_btn.configure_text("📋  Copy Internet Address")
+                        
+                        # Start countdown tick
+                        self._tick_tunnel_timer()
+                    elif tevent == "error":
+                        messagebox.showerror("Tunnel Error", tvalue, parent=self._app)
+                        self._tunnel_banner_lbl.configure(text="⚠ Tunnel failed", fg=RED)
+                        self._public_address = None
+                    elif tevent == "expired":
+                        self._tunnel_banner_lbl.pack_forget()
+                        self._restart_tunnel_btn.pack(pady=5)
+                        self._public_address = None
+                        
+                        self._ip_lbl.configure(text=self._local_ip, font=(_SYSTEM_FONT, 18, "bold"))
+                        self._port_lbl.configure(text=f"Port: {self._port_var.get()}")
+                        self._copy_btn.configure_text("📋  Copy LAN Address")
+                        
+                        messagebox.showwarning(
+                            "Internet Link Expired",
+                            "Your free Pinggy tunnel expired after 60 minutes. Your camera is still streaming locally, but the internet address is no longer reachable. Click 'Restart Internet Link' below to get a new address.",
+                            parent=self._app
+                        )
+            except queue.Empty:
+                pass
+                
         self.after(250, self._poll_status)
+
+    def _tick_tunnel_timer(self) -> None:
+        if not self._running or not self._tunnel or not self._public_address:
+            return
+            
+        rem = self._tunnel.seconds_remaining()
+        if rem is not None:
+            mins, secs = divmod(rem, 60)
+            self._tunnel_banner_lbl.configure(
+                text=f"⏱ Internet link expires in {mins:02d}:{secs:02d}",
+                fg=YELLOW if rem <= 300 else FG2
+            )
+        self.after(1000, self._tick_tunnel_timer)
 
     def _poll_preview(self) -> None:
         if not self._running:
@@ -1161,8 +1276,21 @@ class ReceiverScreen(tk.Frame):
     # ── Actions ────────────────────────────────────────────────────
 
     def _connect(self) -> None:
+        raw_ip = self._ip_var.get().strip()
+        
+        if raw_ip.startswith("tcp://"):
+            raw_ip = raw_ip[len("tcp://"):]
+            
+        if raw_ip.count(":") == 1:
+            host, port_str = raw_ip.split(":")
+            self._ip_var.set(host)
+            self._port_var.set(port_str)
+        else:
+            self._ip_var.set(raw_ip)
+            
         ip = self._ip_var.get().strip()
         port_str = self._port_var.get().strip()
+        
         if not ip:
             messagebox.showwarning("Missing IP", "Enter the sender's IP address.", parent=self._app)
             return
