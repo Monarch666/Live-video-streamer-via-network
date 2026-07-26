@@ -53,10 +53,16 @@ That's it. Both machines must be on the same local network (WiFi/LAN).
 
 ## For Different Networks (Internet)
 
-If the two PCs are on different networks (e.g. home WiFi vs mobile hotspot):
+If the two PCs are on **different networks** (e.g. different cities, mobile data vs WiFi), enable **Internet Mode**.
 
-- **PC1** needs a **public IP** or **port forwarding** on port 9000
-- OR: use the 3-component relay system (see [CLI mode](#cli-mode-3-component-relay) below)
+1. On **PC1 (Camera)**, check the box: **"🌐 Internet Mode (free, unlimited)"** before clicking Start.
+2. The app will automatically create a public link via [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps) — **free, no account, no time limit**.
+3. A public URL like `https://random-words.trycloudflare.com` will appear.
+4. Share this URL. The viewer opens it in **any web browser** (Chrome, Safari, phone, etc.) and sees the live video.
+
+> **Note**: The `cloudflared` binary is auto-downloaded on first use and cached in `bin/`. No signup or configuration required.
+
+*For the built-in viewer (LAN mode), use the `IP:port` address shown in the app.*
 
 ---
 
@@ -131,6 +137,8 @@ python receiver.py --relay-host VPS_IP --relay-port 9000 --stream-name mystream
 | File | Purpose |
 |------|---------|
 | `app.py` | **GUI app — start here** |
+| `cloudflared_tunnel.py` | Cloudflare Tunnel manager (auto-download + lifecycle) |
+| `mjpeg_server.py` | MJPEG over HTTP server (browser-viewable stream) |
 | `protocol.py` | Shared wire format (used by all components) |
 | `relay_server.py` | VPS relay server (CLI mode only) |
 | `sender.py` | CLI sender (no GUI) |
@@ -191,7 +199,7 @@ Adding TLS or an application-layer cipher only requires changes at those lines.
 
 | Limitation | Notes |
 |-----------|-------|
-| **Same-network only** (app.py) | Direct P2P by design — for internet streaming, use CLI relay mode (see above) |
+| **Same-network only** (app.py direct mode) | Direct P2P by design — for internet streaming, use CLI relay mode or MediaMTX with port forwarding |
 | **Bandwidth** | JPEG-per-frame at 20 fps / 720p ≈ 3–8 Mbps; H.264 would be 5–20× smaller |
 | **Latency display** | Accurate only when both PCs are NTP-synced; negative values mean clock skew |
 | **One sender per session** | Multiple viewers are supported |

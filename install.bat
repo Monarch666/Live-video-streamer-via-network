@@ -55,6 +55,10 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo.
+echo NOTE: MediaMTX (for server mode) will be auto-downloaded on first use.
+echo       No manual installation is required.
+
+echo.
 echo ===================================================
 echo  Installation complete!
 echo ===================================================

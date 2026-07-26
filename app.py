@@ -45,6 +45,9 @@ from protocol import (
     MSG_VIDEO_FRAME, MSG_PING, MSG_PONG,
     WRITE_BUFFER_LIMIT,
 )
+from cloudflared_tunnel import CloudflareTunnel
+from mjpeg_server import MJPEGServer, update_frame as mjpeg_update_frame
+
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -275,6 +278,9 @@ class SenderBackend:
                         self.preview_queue.put_nowait(frame)
                     except queue.Full:
                         pass
+
+                    # Push JPEG to MJPEG HTTP server (for internet viewers)
+                    mjpeg_update_frame(jpeg)
 
                     # Broadcast to all connected receivers
                     if receivers:
@@ -775,7 +781,10 @@ class SenderScreen(tk.Frame):
         super().__init__(app, bg=BG)
         self._app = app
         self._backend: Optional[SenderBackend] = None
+        self._tunnel: Optional[CloudflareTunnel] = None
+        self._mjpeg_server: Optional[MJPEGServer] = None
         self._running = False
+        self._public_address: str | None = None
 
         # Stats
         self._fps: float = 0.0
@@ -868,6 +877,30 @@ class SenderScreen(tk.Frame):
         )
         copy_btn.pack(pady=(10, 0))
         self._copy_btn = copy_btn
+        
+        # ── Public Internet Tunnel Banner ─────────────────────────
+        self._tunnel_banner_frame = tk.Frame(addr_frame, bg=PANEL, bd=1, relief=tk.SOLID)
+        self._tunnel_banner_frame.pack(fill=tk.X, pady=(12, 0))
+        
+        tk.Label(
+            self._tunnel_banner_frame, text="🌐 Internet Stream URL (Worldwide)",
+            font=_font(9, "bold"), fg=ACCENT, bg=PANEL
+        ).pack(anchor=tk.W, padx=8, pady=(6, 2))
+
+        self._tunnel_banner_lbl = tk.Label(
+            self._tunnel_banner_frame, text="Checking status...",
+            font=_font(9), fg=FG2, bg=PANEL, wraplength=220, justify=tk.LEFT
+        )
+        self._tunnel_banner_lbl.pack(anchor=tk.W, padx=8, pady=(0, 6))
+
+        self._copy_internet_btn = RoundedButton(
+            self._tunnel_banner_frame, text="📋  Copy Internet Link",
+            command=self._copy_internet_address,
+            bg_color=ACCENT, hover_color="#38bdf8", fg_color="#ffffff",
+            width=200, height=32, radius=6, font_spec=_font(10, "bold"),
+        )
+        # hidden initially until connected
+        self._tunnel_banner_frame.pack_forget()
 
         _sep(parent, color=BORDER, fill=tk.X, pady=(24, 0))
 
@@ -907,10 +940,22 @@ class SenderScreen(tk.Frame):
         )
         cam_entry.pack(side=tk.LEFT, padx=(10, 0))
 
+        self._internet_mode_var = tk.BooleanVar(value=True)
+        self._internet_chk = tk.Checkbutton(
+            parent, text="🌐 Internet Mode (free, unlimited)",
+            variable=self._internet_mode_var,
+            command=self._on_toggle_internet,
+            bg=CARD, fg=FG, selectcolor=BG, activebackground=CARD, activeforeground=FG,
+            font=_font(9), highlightthickness=0, bd=0,
+            wraplength=230, justify=tk.LEFT
+        )
+        self._internet_chk.pack(pady=(16, 0), padx=20, anchor=tk.W)
+
         self._start_btn = RoundedButton(
             parent, text="▶  Start",
             command=self._start_streaming,
             bg_color=GREEN, hover_color="#56d364", fg_color="#ffffff",
+
             width=200, height=40, radius=10, font_spec=_font(12, "bold"),
         )
         self._start_btn.pack(pady=(18, 0))
@@ -957,6 +1002,54 @@ class SenderScreen(tk.Frame):
         self._status_lbl.configure(text="Opening camera…")
         self._poll_status()
         self._poll_preview()
+        
+        if self._internet_mode_var.get():
+            self._status_lbl.configure(text="Streaming — creating internet link…")
+            self._tunnel_banner_frame.pack(fill=tk.X, pady=(12, 0))
+            self._tunnel_banner_lbl.configure(text="🌐 Creating internet link…", fg=FG2)
+            self._tunnel_banner_lbl.pack(pady=5)
+            self._internet_chk.configure(state=tk.DISABLED)
+            
+            # Start MJPEG HTTP server on port 8080
+            mjpeg_port = 8080
+            self._mjpeg_server = MJPEGServer(port=mjpeg_port)
+            self._mjpeg_server.start()
+            
+            # Start Cloudflare Tunnel pointing to the MJPEG server
+            self._tunnel = CloudflareTunnel(local_port=mjpeg_port, protocol="http")
+            self._tunnel.start()
+
+    def _start_tunnel(self) -> None:
+        if self._tunnel and self._tunnel._running:
+            return
+        self._tunnel_banner_frame.pack(fill=tk.X, pady=(12, 0))
+        self._tunnel_banner_lbl.configure(text="Creating Cloudflare Tunnel link...", fg=FG2)
+        
+        mjpeg_port = 8080
+        if not self._mjpeg_server:
+            self._mjpeg_server = MJPEGServer(port=mjpeg_port)
+            self._mjpeg_server.start()
+        
+        self._tunnel = CloudflareTunnel(local_port=mjpeg_port, protocol="http")
+        self._tunnel.start()
+
+    def _stop_tunnel(self) -> None:
+        if self._tunnel:
+            self._tunnel.stop()
+            self._tunnel = None
+        if self._mjpeg_server:
+            self._mjpeg_server.stop()
+            self._mjpeg_server = None
+        self._public_address = None
+        self._tunnel_banner_frame.pack_forget()
+
+    def _on_toggle_internet(self) -> None:
+        if not self._running:
+            return
+        if self._internet_mode_var.get():
+            self._start_tunnel()
+        else:
+            self._stop_tunnel()
 
     def _copy_address(self) -> None:
         port = self._port_var.get()
@@ -966,11 +1059,19 @@ class SenderScreen(tk.Frame):
         self._copy_btn.configure_text("✓  Copied!")
         self.after(2000, lambda: self._copy_btn.configure_text("📋  Copy Address"))
 
+    def _copy_internet_address(self) -> None:
+        if self._public_address:
+            self._app.clipboard_clear()
+            self._app.clipboard_append(self._public_address)
+            self._copy_internet_btn.configure_text("✓  Copied Link!")
+            self.after(2000, lambda: self._copy_internet_btn.configure_text("📋  Copy Internet Link"))
+
     def _on_back(self) -> None:
         self._running = False
         if self._backend:
             self._backend.stop()
             self._backend = None
+        self._stop_tunnel()
         self._app.show_home()
 
     # ── Polling loops ──────────────────────────────────────────────
@@ -1010,7 +1111,36 @@ class SenderScreen(tk.Frame):
                     self._fps_val.configure(text=f"{value}")
         except queue.Empty:
             pass
+            
+        # Poll tunnel queue
+        if self._tunnel:
+            try:
+                while True:
+                    tevent, tvalue = self._tunnel.status_queue.get_nowait()
+                    if tevent == "connecting":
+                        self._tunnel_banner_lbl.configure(text="Connecting to Cloudflare...", fg=FG2)
+                    elif tevent == "connected":
+                        public_url, _ = tvalue
+                        self._public_address = public_url
+                        
+                        self._tunnel_banner_lbl.configure(
+                            text=public_url,
+                            fg=GREEN,
+                            font=_font(9, "bold")
+                        )
+                        self._copy_internet_btn.pack(pady=(4, 6))
+                    elif tevent == "error":
+                        messagebox.showerror("Tunnel Error", tvalue, parent=self._app)
+                        self._tunnel_banner_lbl.configure(text="⚠ Internet link failed", fg=RED)
+                        self._public_address = None
+            except queue.Empty:
+                pass
+                
         self.after(250, self._poll_status)
+
+    def _tick_tunnel_timer(self) -> None:
+        # Cloudflare Tunnel has no time limit — nothing to do here.
+        pass
 
     def _poll_preview(self) -> None:
         if not self._running:
@@ -1161,8 +1291,27 @@ class ReceiverScreen(tk.Frame):
     # ── Actions ────────────────────────────────────────────────────
 
     def _connect(self) -> None:
+        raw_ip = self._ip_var.get().strip()
+        
+        # Strip any URI scheme (tcp://, rtsp://, rtmp://, etc.)
+        import re
+        scheme_match = re.match(r'^[a-zA-Z][a-zA-Z0-9+.-]*://', raw_ip)
+        if scheme_match:
+            raw_ip = raw_ip[scheme_match.end():]
+        
+        # Strip any trailing path (e.g. /live from rtsp://host:port/live)
+        raw_ip = raw_ip.split('/')[0]
+            
+        if raw_ip.count(":") == 1:
+            host, port_str = raw_ip.split(":")
+            self._ip_var.set(host)
+            self._port_var.set(port_str)
+        else:
+            self._ip_var.set(raw_ip)
+            
         ip = self._ip_var.get().strip()
         port_str = self._port_var.get().strip()
+        
         if not ip:
             messagebox.showwarning("Missing IP", "Enter the sender's IP address.", parent=self._app)
             return
