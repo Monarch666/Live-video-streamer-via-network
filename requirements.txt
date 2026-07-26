@@ -6,3 +6,4 @@
 # All networking uses Python's standard library asyncio.
 opencv-python>=4.8.0
 Pillow>=10.0.0
+pexpect>=4.8.0
