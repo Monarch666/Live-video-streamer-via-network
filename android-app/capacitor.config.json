@@ -1,0 +1,15 @@
+{
+  "appId": "com.monarch666.dronestreamer",
+  "appName": "Drone Command Center",
+  "webDir": ".",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
+  }
+}

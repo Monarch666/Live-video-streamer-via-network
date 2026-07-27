@@ -1,0 +1,22 @@
+{
+  "name": "Drone Streamer & Command Center",
+  "short_name": "Drone GCS",
+  "description": "Live drone camera streaming receiver & transmitter for Android Ground Control Stations",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#06090e",
+  "theme_color": "#06090e",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/9183/9183457.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/9183/9183457.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

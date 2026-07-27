@@ -1,9 +1,4 @@
-# Live Video Relay — Dependencies
-#
-# opencv-python  — webcam capture, JPEG encode/decode
-# Pillow         — display video frames in the tkinter GUI (app.py)
-# numpy is installed automatically as a transitive dependency.
-# All networking uses Python's standard library asyncio.
+# Live Video Relay - Dependencies
 # MediaMTX is a standalone binary (auto-downloaded), not a Python package.
 opencv-python>=4.8.0
 Pillow>=10.0.0
