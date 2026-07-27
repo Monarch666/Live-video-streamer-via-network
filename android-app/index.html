@@ -3,49 +3,209 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#0b0f17">
-  <title>Live Video Relay Dashboard</title>
+  <meta name="theme-color" content="#0d1117">
+  <meta name="description" content="Live Video Relay — Share your camera or watch streams, just like the PC app but on Android.">
+  <title>Live Video Relay</title>
 
-  <!-- PWA Manifest -->
   <link rel="manifest" href="manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-  <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-  <!-- Stylesheet -->
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-  <div class="dashboard-container">
-    <!-- Header -->
-    <header class="dashboard-header">
-      <div class="title-row">
-        <span class="status-dot-title"></span>
-        <h1 class="main-title">Live Video Relay Dashboard</h1>
-      </div>
-      <p class="subtitle">Multi-View Streaming console</p>
-    </header>
+  <div class="app">
 
-    <!-- Control Bar -->
-    <div class="add-feed-bar">
-      <input type="text" id="streamUrlInput" class="input-url" placeholder="Paste TryCloudflare or LAN stream URL (e.g. https://xxx.trycloudflare.com)">
-      <input type="text" id="streamNameInput" class="input-name" placeholder="Camera Name (e.g. Side Gate)">
-      <button id="addFeedBtn" class="btn-add">
-        <i class="fa-solid fa-plus"></i> Add Feed
-      </button>
+    <!-- ═══════════════════════════════════════════════════════
+         SCREEN 1: HOME
+         ═══════════════════════════════════════════════════════ -->
+    <div id="homeScreen" class="screen home-screen active">
+      <div class="home-header">
+        <div class="emoji">📡</div>
+        <h1>Live Video Relay</h1>
+        <p>Direct camera sharing over your local network</p>
+      </div>
+
+      <div class="cards-row">
+        <!-- Share My Camera Card -->
+        <div class="home-card" onclick="app.showSender()">
+          <div class="card-emoji">📷</div>
+          <div class="card-title">Share My Camera</div>
+          <div class="card-sub">Stream your camera to<br>another device on the network</div>
+          <button class="card-btn green">Start Sharing</button>
+        </div>
+
+        <!-- Watch Stream Card -->
+        <div class="home-card" onclick="app.showReceiver()">
+          <div class="card-emoji">👁</div>
+          <div class="card-title">Watch Stream</div>
+          <div class="card-sub">Connect to a camera<br>shared on the network</div>
+          <button class="card-btn blue">Connect</button>
+        </div>
+      </div>
+
+      <div class="home-footer">Works on the same LAN without any extra configuration.</div>
     </div>
 
-    <!-- Video Feeds Grid -->
-    <main id="feedsGrid" class="feeds-grid">
-      <!-- Dynamic stream cards inserted here -->
-    </main>
+    <!-- ═══════════════════════════════════════════════════════
+         SCREEN 2: SENDER (Share My Camera)
+         ═══════════════════════════════════════════════════════ -->
+    <div id="senderScreen" class="screen">
+      <!-- Top Bar -->
+      <div class="topbar">
+        <button class="btn-back" onclick="app.showHome()">← Back</button>
+        <span class="screen-title">📷  Share My Camera</span>
+        <div class="status-wrap">
+          <span class="status-dot" id="senderDot"></span>
+          <span class="status-text" id="senderStatus">Ready</span>
+        </div>
+      </div>
 
-    <!-- Footer -->
-    <footer class="dashboard-footer">
-      Live Video Relay — powered by Cloudflare Tunnel
-    </footer>
+      <!-- Body: Video Preview + Sidebar -->
+      <div class="sender-body">
+        <!-- Left: Live Camera Preview -->
+        <div class="sender-video-wrap">
+          <video id="senderVideo" autoplay playsinline muted style="display:none;"></video>
+          <div class="sender-placeholder" id="senderPlaceholder">
+            Tap <b>▶ Start Sharing</b> to begin
+          </div>
+        </div>
+
+        <!-- Right: Info Sidebar -->
+        <div class="sender-sidebar">
+          <!-- Address Section -->
+          <div class="sidebar-section">
+            <div class="sidebar-label">Share this address</div>
+            <div class="address-box">
+              <div class="address-ip" id="senderIp">—</div>
+              <div class="address-port" id="senderPort">Port: 9000</div>
+            </div>
+            <button class="btn-block panel" style="margin-top:10px;" id="btnCopyAddr" onclick="app.copyAddress()">
+              📋  Copy Address
+            </button>
+
+            <!-- Internet Tunnel Banner -->
+            <div class="tunnel-banner" id="tunnelBanner">
+              <div class="tunnel-title">🌐 Internet Stream URL (Worldwide)</div>
+              <div class="tunnel-url" id="tunnelUrl">Creating Cloudflare Tunnel link…</div>
+              <button class="btn-block panel" style="margin-top:8px;display:none;" id="btnCopyTunnel" onclick="app.copyTunnelUrl()">
+                📋  Copy Internet Link
+              </button>
+            </div>
+          </div>
+
+          <div class="sidebar-sep"></div>
+
+          <!-- Config Section -->
+          <div class="sidebar-section">
+            <div class="sidebar-row">
+              <label>Port</label>
+              <input type="number" id="senderPortInput" value="9000">
+            </div>
+            <div class="sidebar-row">
+              <label>Camera</label>
+              <select id="senderCamSelect">
+                <option value="environment">Rear Camera</option>
+                <option value="user">Front Camera</option>
+              </select>
+            </div>
+            <div class="checkbox-row">
+              <input type="checkbox" id="chkInternet" checked>
+              <label for="chkInternet">🌐 Internet Mode (free, unlimited)</label>
+            </div>
+          </div>
+
+          <button class="btn-block green" id="btnStartSharing" onclick="app.startSharing()">
+            ▶  Start Sharing
+          </button>
+          <button class="btn-block red" id="btnStopSharing" onclick="app.stopSharing()" style="display:none;margin-top:8px;">
+            ■  Stop Sharing
+          </button>
+
+          <div class="sidebar-sep"></div>
+
+          <!-- Stats Section -->
+          <div class="sidebar-section">
+            <div class="stat-row"><span class="stat-label">Viewers</span><span class="stat-value" id="senderViewers">—</span></div>
+            <div class="stat-row"><span class="stat-label">FPS sent</span><span class="stat-value" id="senderFps">—</span></div>
+            <div class="stat-row"><span class="stat-label">Quality</span><span class="stat-value" id="senderQuality">720p / 75%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         SCREEN 3: RECEIVER (Watch Stream)
+         ═══════════════════════════════════════════════════════ -->
+    <div id="receiverScreen" class="screen">
+      <!-- Top Bar -->
+      <div class="topbar">
+        <button class="btn-back" onclick="app.showHome()">← Back</button>
+        <span class="screen-title">👁  Watch Stream</span>
+        <div class="status-wrap">
+          <span class="status-dot" id="receiverDot"></span>
+          <span class="status-text" id="receiverStatus">Not connected</span>
+        </div>
+      </div>
+
+      <!-- Connect Form -->
+      <div class="receiver-form">
+        <label>Address:</label>
+        <input type="text" id="receiverIp" class="ip-input" placeholder="192.168.1.100 or cloudflare URL">
+        <label>Port:</label>
+        <input type="text" id="receiverPort" class="port-input" value="9000">
+        <button class="btn-connect" id="btnConnect" onclick="app.connectReceiver()">Connect</button>
+        <button class="btn-disconnect" id="btnDisconnect" onclick="app.disconnectReceiver()">Disconnect</button>
+      </div>
+
+      <!-- Video Area -->
+      <div class="receiver-video-wrap">
+        <img id="receiverVideo" style="display:none;" alt="Live Stream">
+        <div class="receiver-placeholder" id="receiverPlaceholder">Enter an IP address to connect…</div>
+      </div>
+
+      <!-- Stats Bar -->
+      <div class="receiver-stats-bar">
+        <span id="recFps">FPS: —</span>
+        <span id="recLatency">Latency: —</span>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         SCREEN 4: MULTI-VIEW DASHBOARD (Receiver Grid)
+         ═══════════════════════════════════════════════════════ -->
+    <div id="dashboardScreen" class="screen">
+      <!-- Top Bar -->
+      <div class="topbar">
+        <button class="btn-back" onclick="app.showHome()">← Back</button>
+        <span class="screen-title">📡  Multi-View Dashboard</span>
+      </div>
+
+      <!-- Dashboard Header -->
+      <div class="multiview-header">
+        <span class="title-dot"></span>
+        <div>
+          <h2>Live Video Relay Dashboard</h2>
+          <p>Multi-View Streaming console</p>
+        </div>
+      </div>
+
+      <!-- Add Feed Bar -->
+      <div class="multiview-add-bar">
+        <input type="text" id="mvUrlInput" class="url-input" placeholder="Paste TryCloudflare or LAN stream URL (e.g. https://xxx.trycloudflare.com)">
+        <input type="text" id="mvNameInput" class="name-input" placeholder="Camera Name">
+        <button class="btn-add-feed" onclick="app.addDashboardFeed()">
+          <i class="fa-solid fa-plus"></i> Add Feed
+        </button>
+      </div>
+
+      <!-- Feeds Grid -->
+      <div class="feeds-grid" id="feedsGrid"></div>
+
+      <div class="multiview-footer">Live Video Relay — powered by Cloudflare Tunnel</div>
+    </div>
+
   </div>
 
   <script src="js/app.js"></script>
