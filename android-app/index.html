@@ -3,176 +3,51 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#06090e">
-  <meta name="description" content="Android Drone Video Streamer & Tactical Command Center Ground Control Station">
-  <title>Drone Streamer - Command Center</title>
+  <meta name="theme-color" content="#0b0f17">
+  <title>Live Video Relay Dashboard</title>
 
   <!-- PWA Manifest -->
   <link rel="manifest" href="manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-  <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
-
-  <!-- Font Awesome Icons -->
+  <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-  <!-- Custom Stylesheet -->
+  <!-- Stylesheet -->
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-  <div class="app-container">
-    <!-- Header Navbar -->
-    <header class="app-header">
-      <div class="brand">
-        <div class="brand-logo">
-          <i class="fa-solid fa-drone"></i>
-        </div>
-        <span class="brand-title">DRONE GCS</span>
-        <span class="mode-badge" id="modeBadge">COMMAND CENTER</span>
+  <div class="dashboard-container">
+    <!-- Header -->
+    <header class="dashboard-header">
+      <div class="title-row">
+        <span class="status-dot-title"></span>
+        <h1 class="main-title">Live Video Relay Dashboard</h1>
       </div>
-
-      <div class="header-actions">
-        <div class="status-indicator">
-          <span class="status-dot" id="statusDot"></span>
-          <span id="statusText">OFFLINE</span>
-        </div>
-        <button class="btn-tactical" id="btnConnectModal" title="Connection Settings">
-          <i class="fa-solid fa-signal"></i>
-        </button>
-      </div>
+      <p class="subtitle">Multi-View Streaming console</p>
     </header>
 
-    <!-- Main Live Video Viewport -->
-    <main class="viewport-wrapper">
-      <div class="video-stage">
-        <!-- Live Video Element (Android Camera Transmitter) -->
-        <video id="liveVideo" class="live-feed-video" autoplay playsinline muted style="display: none;"></video>
+    <!-- Control Bar -->
+    <div class="add-feed-bar">
+      <input type="text" id="streamUrlInput" class="input-url" placeholder="Paste TryCloudflare or LAN stream URL (e.g. https://xxx.trycloudflare.com)">
+      <input type="text" id="streamNameInput" class="input-name" placeholder="Camera Name (e.g. Side Gate)">
+      <button id="addFeedBtn" class="btn-add">
+        <i class="fa-solid fa-plus"></i> Add Feed
+      </button>
+    </div>
 
-        <!-- Live MJPEG Stream Image Element (Command Center Receiver) -->
-        <img id="liveImage" class="live-feed-img" src="https://images.unsplash.com/photo-1508614589041-895b88991e3e?q=80&w=1200&auto=format&fit=crop" alt="Drone Live Feed Viewport">
-
-        <!-- Dynamic HUD Canvas Overlay -->
-        <canvas id="hudCanvas" class="hud-canvas"></canvas>
-
-        <!-- Tactical HUD Panels -->
-        <div class="tactical-hud-panel">
-          <!-- Top Telemetry Row -->
-          <div class="hud-top-bar">
-            <div class="telemetry-card">
-              <div class="telemetry-row">
-                <div class="telemetry-item">
-                  <span class="telemetry-label">ALTITUDE</span>
-                  <span class="telemetry-value" id="valAlt">124.5m</span>
-                </div>
-                <div class="telemetry-item">
-                  <span class="telemetry-label">AIRSPEED</span>
-                  <span class="telemetry-value" id="valSpeed">14.8m/s</span>
-                </div>
-                <div class="telemetry-item">
-                  <span class="telemetry-label">BATTERY</span>
-                  <span class="telemetry-value" id="valBat">88%</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="telemetry-card">
-              <div class="telemetry-row">
-                <div class="telemetry-item">
-                  <span class="telemetry-label">FPS</span>
-                  <span class="telemetry-value" id="valFps">24</span>
-                </div>
-                <div class="telemetry-item">
-                  <span class="telemetry-label">LATENCY</span>
-                  <span class="telemetry-value" id="valLatency">28ms</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Bottom Action Toolbar -->
-          <div class="hud-bottom-bar">
-            <div class="hud-toolbar">
-              <button class="btn-tactical" id="btnToggleFilter" title="Toggle Thermal / NVG Palette">
-                <i class="fa-solid fa-eye"></i>
-              </button>
-              <button class="btn-tactical" id="btnSnapshot" title="Take HD Snapshot">
-                <i class="fa-solid fa-camera"></i>
-              </button>
-              <button class="btn-tactical danger" id="btnRecord" title="Record Flight Video">
-                <i class="fa-solid fa-circle"></i>
-              </button>
-              <button class="btn-tactical" id="btnFullscreen" title="Toggle Fullscreen">
-                <i class="fa-solid fa-expand"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+    <!-- Video Feeds Grid -->
+    <main id="feedsGrid" class="feeds-grid">
+      <!-- Dynamic stream cards inserted here -->
     </main>
 
-    <!-- Connection Settings Modal / Drawer -->
-    <div class="drawer-backdrop" id="connectionModal">
-      <div class="connection-modal">
-        <div class="modal-header">
-          <h3 class="modal-title">
-            <i class="fa-solid fa-tower-broadcast"></i> Network Connection Setup
-          </h3>
-          <button class="btn-tactical" id="btnCloseModal">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
-
-        <div class="tab-nav">
-          <div class="tab-btn active" data-mode="command_center">Command Center (Viewer)</div>
-          <div class="tab-btn" data-mode="drone_transmitter">Drone Camera (Sender)</div>
-        </div>
-
-        <form id="connectForm">
-          <!-- Command Center Viewer Inputs -->
-          <div id="sectionViewerInput">
-            <div class="form-group" style="margin-bottom: 12px;">
-              <label class="form-label">LAN Direct Stream (IP & Port)</label>
-              <div style="display: flex; gap: 8px;">
-                <input type="text" class="form-input" id="inputIp" placeholder="192.168.1.100" style="flex: 2;">
-                <input type="text" class="form-input" id="inputPort" placeholder="9000" style="flex: 1;">
-              </div>
-            </div>
-
-            <div class="form-group" style="margin-bottom: 16px;">
-              <label class="form-label">Internet Cloudflare Tunnel / MJPEG URL</label>
-              <input type="url" class="form-input" id="inputUrl" placeholder="https://random-words.trycloudflare.com">
-            </div>
-          </div>
-
-          <!-- Drone Transmitter Inputs -->
-          <div id="sectionTransmitterInput" style="display: none;">
-            <div class="form-group" style="margin-bottom: 12px;">
-              <label class="form-label">Android Camera Source</label>
-              <select class="form-select" id="selectCamera">
-                <option value="environment">Rear Camera (Drone/Main)</option>
-                <option value="user">Front Camera</option>
-              </select>
-            </div>
-
-            <div class="form-group" style="margin-bottom: 16px;">
-              <label class="form-label">Target Command Center IP / Host</label>
-              <input type="text" class="form-input" id="inputTargetHost" placeholder="192.168.1.50:9000">
-            </div>
-          </div>
-
-          <button type="submit" class="btn-primary">
-            CONNECT FEED <i class="fa-solid fa-arrow-right"></i>
-          </button>
-        </form>
-      </div>
-    </div>
+    <!-- Footer -->
+    <footer class="dashboard-footer">
+      Live Video Relay — powered by Cloudflare Tunnel
+    </footer>
   </div>
 
-  <!-- Main Application Script -->
   <script src="js/app.js"></script>
 </body>
 </html>
