@@ -427,6 +427,10 @@ class ReceiverBackend:
                 pass
 
     async def _connect_and_receive(self) -> None:
+        if "trycloudflare.com" in self.host or self.host.startswith("http://") or self.host.startswith("https://"):
+            await self._receive_mjpeg_http()
+            return
+
         self.status_queue.put(("connecting", None))
         try:
             reader, writer = await asyncio.wait_for(
@@ -536,6 +540,60 @@ class ReceiverBackend:
                 await writer.drain()
             except Exception:
                 break
+
+    async def _receive_mjpeg_http(self) -> None:
+        self.status_queue.put(("connecting", None))
+        url = self.host if self.host.startswith("http") else f"https://{self.host}"
+        if not url.endswith("/video_feed") and not url.endswith("/stream"):
+            url = f"{url.rstrip('/')}/video_feed"
+
+        loop = asyncio.get_running_loop()
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="mjpeg-rx")
+
+        def open_stream():
+            cap = cv2.VideoCapture(url)
+            return cap if cap.isOpened() else None
+
+        cap = await loop.run_in_executor(executor, open_stream)
+        if cap is None:
+            self.status_queue.put(("error", f"Cannot connect to stream URL:\n{url}"))
+            executor.shutdown(wait=False)
+            return
+
+        self.status_queue.put(("connected", None))
+        frames_in_window = 0
+        window_start = loop.time()
+
+        try:
+            while not self._stop_event.is_set():
+                t0 = loop.time()
+                ok, frame = await loop.run_in_executor(executor, cap.read)
+                if not ok or frame is None:
+                    await asyncio.sleep(0.05)
+                    continue
+
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                try:
+                    self.frame_queue.put_nowait(rgb)
+                except queue.Full:
+                    pass
+                frames_in_window += 1
+
+                now = loop.time()
+                if now - window_start >= 1.0:
+                    fps_actual = frames_in_window / (now - window_start)
+                    self.status_queue.put(("fps", round(fps_actual, 1)))
+                    self.status_queue.put(("latency", 0))
+                    frames_in_window = 0
+                    window_start = now
+
+                elapsed = loop.time() - t0
+                if elapsed < 0.033:
+                    await asyncio.sleep(0.033 - elapsed)
+        finally:
+            cap.release()
+            executor.shutdown(wait=False)
+            self.status_queue.put(("disconnected", None))
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1292,34 +1350,38 @@ class ReceiverScreen(tk.Frame):
 
     def _connect(self) -> None:
         raw_ip = self._ip_var.get().strip()
-        
-        # Strip any URI scheme (tcp://, rtsp://, rtmp://, etc.)
-        import re
-        scheme_match = re.match(r'^[a-zA-Z][a-zA-Z0-9+.-]*://', raw_ip)
-        if scheme_match:
-            raw_ip = raw_ip[scheme_match.end():]
-        
-        # Strip any trailing path (e.g. /live from rtsp://host:port/live)
-        raw_ip = raw_ip.split('/')[0]
-            
-        if raw_ip.count(":") == 1:
-            host, port_str = raw_ip.split(":")
-            self._ip_var.set(host)
-            self._port_var.set(port_str)
+
+        if "trycloudflare.com" in raw_ip or raw_ip.startswith("http://") or raw_ip.startswith("https://"):
+            ip = raw_ip
+            port = 443 if "https" in raw_ip or "trycloudflare.com" in raw_ip else 80
         else:
-            self._ip_var.set(raw_ip)
-            
-        ip = self._ip_var.get().strip()
-        port_str = self._port_var.get().strip()
-        
-        if not ip:
-            messagebox.showwarning("Missing IP", "Enter the sender's IP address.", parent=self._app)
-            return
-        try:
-            port = int(port_str)
-        except ValueError:
-            messagebox.showwarning("Invalid Port", "Port must be a number.", parent=self._app)
-            return
+            # Strip any URI scheme (tcp://, rtsp://, rtmp://, etc.)
+            import re
+            scheme_match = re.match(r'^[a-zA-Z][a-zA-Z0-9+.-]*://', raw_ip)
+            if scheme_match:
+                raw_ip = raw_ip[scheme_match.end():]
+
+            # Strip any trailing path (e.g. /live from rtsp://host:port/live)
+            raw_ip = raw_ip.split('/')[0]
+
+            if raw_ip.count(":") == 1:
+                host, port_str = raw_ip.split(":")
+                self._ip_var.set(host)
+                self._port_var.set(port_str)
+            else:
+                self._ip_var.set(raw_ip)
+
+            ip = self._ip_var.get().strip()
+            port_str = self._port_var.get().strip()
+
+            if not ip:
+                messagebox.showwarning("Missing IP", "Enter the sender's IP address.", parent=self._app)
+                return
+            try:
+                port = int(port_str)
+            except ValueError:
+                messagebox.showwarning("Invalid Port", "Port must be a number.", parent=self._app)
+                return
 
         if self._backend:
             self._backend.stop()
