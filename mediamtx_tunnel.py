@@ -164,9 +164,10 @@ class MediaMTXTunnel:
             local_ip = get_local_ip()
             self.status_queue.put(("connected", (local_ip, self.rtsp_port)))
 
-            # Monitor process until stopped
-            while self._running and self._process.poll() is None:
-                time.sleep(0.5)
+            # Read process output line by line to keep the stdout buffer drained
+            for line in iter(self._process.stdout.readline, ''):
+                if not self._running:
+                    break
 
             if self._running and self._process.poll() is not None:
                 self.status_queue.put(("error", "MediaMTX process exited unexpectedly."))

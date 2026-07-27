@@ -143,32 +143,24 @@ class CloudflareTunnel:
             url_found = False
             url_pattern = re.compile(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com')
 
-            # Read process output line by line to locate the trycloudflare.com URL
+            # Read process output line by line to locate the URL and keep the stdout buffer drained
             for line in iter(self._process.stdout.readline, ''):
                 if not self._running:
                     break
-                match = url_pattern.search(line)
-                if match and not url_found:
-                    self.public_url = match.group(0)
-                    url_found = True
-                    self.status_queue.put(("connected", (self.public_url, self.local_port)))
-                    break
+                
+                if not url_found:
+                    match = url_pattern.search(line)
+                    if match:
+                        self.public_url = match.group(0)
+                        url_found = True
+                        self.status_queue.put(("connected", (self.public_url, self.local_port)))
 
-            if not url_found and self._running:
-                if self._process.poll() is not None:
-                    out, _ = self._process.communicate()
-                    self.status_queue.put(("error", f"cloudflared failed: {out[:200]}"))
-                else:
-                    self.status_queue.put(("error", "Could not obtain Cloudflare Tunnel URL."))
-                self._running = False
-                return
-
-            # Keep thread alive while process runs
-            while self._running and self._process.poll() is None:
-                time.sleep(0.5)
-
-            if self._running and self._process.poll() is not None:
-                self.status_queue.put(("error", "Cloudflare Tunnel process terminated."))
+            if self._running:
+                exit_code = self._process.poll()
+                if exit_code is not None and exit_code != 0:
+                    self.status_queue.put(("error", f"Cloudflare Tunnel process terminated with exit code {exit_code}."))
+                elif not url_found:
+                    self.status_queue.put(("error", "Could not obtain Cloudflare Tunnel URL before process exited."))
 
         except Exception as e:
             if self._running:
