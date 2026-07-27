@@ -7,3 +7,4 @@
 # MediaMTX is a standalone binary (auto-downloaded), not a Python package.
 opencv-python>=4.8.0
 Pillow>=10.0.0
+pexpect>=4.8.0
