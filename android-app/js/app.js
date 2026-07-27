@@ -85,8 +85,29 @@ class VideoRelayApp {
     portElem.textContent = `Port: ${port}`;
   }
 
-  startSharing() {
+  async startSharing() {
     if (this.isSharing) return;
+
+    // --- CAPACITOR PERMISSION CHECK ---
+    // If running as a native app, explicitly request camera permissions using the plugin.
+    if (window.Capacitor && window.Capacitor.isNativePlatform()) {
+      try {
+        const { Camera } = window.Capacitor.Plugins;
+        if (Camera) {
+          const check = await Camera.checkPermissions();
+          if (check.camera !== 'granted') {
+            const request = await Camera.requestPermissions({ permissions: ['camera'] });
+            if (request.camera !== 'granted') {
+              alert('Camera permission is required to stream video.');
+              return;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Capacitor Camera plugin not found or error:', e);
+        // Fallback to standard getUserMedia which might still work if permissions were manually granted
+      }
+    }
 
     const camFacing = document.getElementById('senderCamSelect').value || 'environment';
     const placeholder = document.getElementById('senderPlaceholder');
