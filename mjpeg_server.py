@@ -16,7 +16,7 @@ Architecture:
 import io
 import threading
 import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 
 # Shared state: latest JPEG frame + condition variable for notification
@@ -170,11 +170,11 @@ class MJPEGServer:
 
     def __init__(self, port: int = 8080):
         self.port = port
-        self._httpd: HTTPServer | None = None
+        self._httpd: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
-        self._httpd = HTTPServer(("0.0.0.0", self.port), _MJPEGHandler)
+        self._httpd = ThreadingHTTPServer(("0.0.0.0", self.port), _MJPEGHandler)
         self._httpd.timeout = 1
         self._thread = threading.Thread(target=self._serve, daemon=True)
         self._thread.start()
