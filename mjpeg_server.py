@@ -322,6 +322,8 @@ class _MJPEGHandler(BaseHTTPRequestHandler):
             if (saved) {
                 try {
                     feeds = JSON.parse(saved);
+                    // Filter out stale/dead trycloudflare URLs from previous sessions
+                    feeds = feeds.filter(f => f.isPrimary || !f.url.includes('trycloudflare.com'));
                 } catch(e) {
                     feeds = [];
                 }
@@ -488,16 +490,19 @@ class _MJPEGHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
 
+        last_sent_frame = None
         try:
             while True:
                 with _frame_condition:
-                    # Wait for a new frame (timeout to check connection)
-                    _frame_condition.wait(timeout=2.0)
+                    while _latest_frame is last_sent_frame:
+                        if not _frame_condition.wait(timeout=1.0):
+                            break
                     frame = _latest_frame
 
-                if frame is None:
+                if frame is None or frame is last_sent_frame:
                     continue
 
+                last_sent_frame = frame
                 try:
                     self.wfile.write(f"--{boundary}\r\n".encode())
                     self.wfile.write(b"Content-Type: image/jpeg\r\n")
@@ -507,9 +512,6 @@ class _MJPEGHandler(BaseHTTPRequestHandler):
                     self.wfile.flush()
                 except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
                     break
-
-                # ~20 fps max for HTTP viewers
-                time.sleep(0.05)
         except Exception:
             pass
 

@@ -1,3 +1,4 @@
+import atexit
 import os
 import sys
 import platform
@@ -30,6 +31,7 @@ class CloudflareTunnel:
         self._process: subprocess.Popen | None = None
         self._running = False
         self._thread: threading.Thread | None = None
+        atexit.register(self.stop)
 
     def _get_executable_name(self) -> str:
         return "cloudflared.exe" if sys.platform == "win32" else "cloudflared"

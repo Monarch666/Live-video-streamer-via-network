@@ -3,3 +3,4 @@
 opencv-python>=4.8.0
 Pillow>=10.0.0
 pexpect>=4.8.0
+websockets>=11.0
