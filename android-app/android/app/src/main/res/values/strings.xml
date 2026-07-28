@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Drone Command Center</string>
+    <string name="title_activity_main">Drone Command Center</string>
+    <string name="package_name">com.monarch666.dronestreamer</string>
+    <string name="custom_url_scheme">com.monarch666.dronestreamer</string>
+</resources>
