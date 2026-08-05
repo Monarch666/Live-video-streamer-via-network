@@ -601,14 +601,15 @@ class HomeScreen(tk.Frame):
         header = tk.Frame(self, bg=BG); header.pack(pady=(60, 0))
         tk.Label(header, text="📡 Live Video Relay", font=_font(30, "bold"), fg=FG, bg=BG).pack()
         tk.Label(header, text="Direct camera sharing over your network", font=_font(13), fg=FG2, bg=BG).pack(pady=6)
-        row = tk.Frame(self, bg=BG); row.pack(pady=50)
-        self._card(row, "📷", "Share My Camera", "Stream your webcam", "Start Sharing", GREEN, "#56d364", self._app.show_sender).pack(side=tk.LEFT, padx=20)
-        self._card(row, "👁", "Watch Stream", "Connect to a camera", "Connect", ACCENT, ACCENT_H, self._app.show_receiver).pack(side=tk.LEFT, padx=20)
+        row = tk.Frame(self, bg=BG); row.pack(pady=40)
+        self._card(row, "📷", "Share Camera", "Stream webcam", "Start Sharing", GREEN, "#56d364", self._app.show_sender).pack(side=tk.LEFT, padx=12)
+        self._card(row, "👁", "Watch Stream", "Connect or Host", "Connect", ACCENT, ACCENT_H, self._app.show_receiver).pack(side=tk.LEFT, padx=12)
+        self._card(row, "🖥️", "Multi-Bridge Grid", "4-Camera Command Center", "Open Grid", YELLOW, "#f0c674", self._app.show_multibridge).pack(side=tk.LEFT, padx=12)
     def _card(self, p, e, t, s, bt, bc, bh, cmd):
-        f = tk.Frame(p, bg=CARD, width=280, height=320); f.pack_propagate(False)
-        tk.Label(f, text=e, font=_font(52), bg=CARD).pack(pady=(36, 6))
-        tk.Label(f, text=t, font=_font(17, "bold"), bg=CARD, fg=FG).pack()
-        tk.Label(f, text=s, font=_font(11), bg=CARD, fg=FG2).pack(pady=(8, 24))
+        f = tk.Frame(p, bg=CARD, width=260, height=310); f.pack_propagate(False)
+        tk.Label(f, text=e, font=_font(48), bg=CARD).pack(pady=(30, 4))
+        tk.Label(f, text=t, font=_font(16, "bold"), bg=CARD, fg=FG).pack()
+        tk.Label(f, text=s, font=_font(11), bg=CARD, fg=FG2).pack(pady=(6, 20))
         RoundedButton(f, text=bt, command=cmd, bg_color=bc, hover_color=bh, fg_color="#fff").pack()
         return f
 
@@ -719,6 +720,9 @@ class ReceiverScreen(tk.Frame):
         self._conn_btn = RoundedButton(self._lan_f, text="Connect", command=self._connect); self._conn_btn.pack(side=tk.LEFT)
 
         self._bridge_f = tk.Frame(self, bg=CARD); self._bridge_f.pack_forget()
+        tk.Label(self._bridge_f, text="Bridge Port:", bg=CARD, fg=FG2, font=_font(10)).pack(side=tk.LEFT, padx=(0, 4))
+        self._bridge_port_v = tk.StringVar(value="9001")
+        tk.Entry(self._bridge_f, textvariable=self._bridge_port_v, width=6).pack(side=tk.LEFT, padx=5)
         self._bridge_btn = RoundedButton(self._bridge_f, text="Host Bridge", command=self._host_bridge); self._bridge_btn.pack(side=tk.LEFT)
         self._url_lbl = tk.Label(self._bridge_f, text="", fg=ACCENT, bg=CARD, font=_font(10, "bold")); self._url_lbl.pack(side=tk.LEFT, padx=10)
         self._copy_bridge_btn = RoundedButton(self._bridge_f, text="📋 Copy Bridge Link", command=self._copy_bridge_url, bg_color=PANEL, hover_color=BORDER, fg_color=ACCENT)
@@ -745,7 +749,11 @@ class ReceiverScreen(tk.Frame):
 
     def _host_bridge(self):
         if self._connected: return
-        self._bridge_be = GlobalBridgeBackend()
+        try:
+            port = int(self._bridge_port_v.get())
+        except ValueError:
+            port = 9001
+        self._bridge_be = GlobalBridgeBackend(port=port)
         self._bridge_be.start(); self._connected = True; self._poll()
 
     def _poll(self):
@@ -778,6 +786,143 @@ class ReceiverScreen(tk.Frame):
         if self._bridge_be: self._bridge_be.stop(); self._bridge_be = None
         self._app.show_home()
 
+
+# ═══════════════════════════════════════════════════════════════════
+# MULTI-BRIDGE COMMAND CENTER (4-CAMERA PC GRID)
+# ═══════════════════════════════════════════════════════════════════
+
+class MultiBridgeCell(tk.Frame):
+    def __init__(self, parent, title="Camera Feed", default_port=9001):
+        super().__init__(parent, bg=CARD, bd=1, relief=tk.SOLID)
+        self.port = default_port
+        self.backend: Optional[GlobalBridgeBackend] = None
+        self.bridge_url = ""
+        self.running = False
+        
+        # Header
+        top = tk.Frame(self, bg=PANEL, height=36); top.pack(fill=tk.X); top.pack_propagate(False)
+        self.dot = StatusDot(top, size=10); self.dot.pack(side=tk.LEFT, padx=8)
+        tk.Label(top, text=title, font=_font(11, "bold"), fg=FG, bg=PANEL).pack(side=tk.LEFT)
+        
+        tk.Label(top, text="Port:", font=_font(9), fg=FG2, bg=PANEL).pack(side=tk.LEFT, padx=(10, 2))
+        self.port_var = tk.StringVar(value=str(default_port))
+        tk.Entry(top, textvariable=self.port_var, width=5).pack(side=tk.LEFT)
+
+        self.btn_host = RoundedButton(top, text="Host", command=self.toggle_host, bg_color=GREEN, fg_color="#fff")
+        self.btn_host.pack(side=tk.LEFT, padx=6)
+
+        self.url_lbl = tk.Label(top, text="", fg=ACCENT, bg=PANEL, font=_font(9, "bold"))
+        self.url_lbl.pack(side=tk.LEFT, padx=4)
+
+        self.btn_copy = RoundedButton(top, text="📋 Copy", command=self.copy_url, bg_color=CARD, hover_color=BORDER, fg_color=ACCENT)
+        self.btn_copy.pack(side=tk.LEFT)
+        self.btn_copy.pack_forget()
+
+        self.fps_lbl = tk.Label(top, text="Idle", font=_font(9), fg=FG2, bg=PANEL)
+        self.fps_lbl.pack(side=tk.RIGHT, padx=8)
+
+        # Video Canvas
+        self.video = VideoCanvas(self)
+        self.video.pack(fill=tk.BOTH, expand=True)
+
+    def toggle_host(self):
+        if self.running:
+            self.stop()
+        else:
+            self.start()
+
+    def start(self):
+        try:
+            p = int(self.port_var.get())
+        except ValueError:
+            p = self.port
+        self.backend = GlobalBridgeBackend(port=p)
+        self.backend.start()
+        self.running = True
+        self.btn_host.configure_text("Stop")
+        self.btn_host.configure(bg=RED)
+        self.dot.set("waiting")
+        self.poll()
+
+    def stop(self):
+        self.running = False
+        if self.backend:
+            self.backend.stop()
+            self.backend = None
+        self.btn_host.configure_text("Host")
+        self.btn_host.configure(bg=GREEN)
+        self.btn_copy.pack_forget()
+        self.url_lbl.config(text="")
+        self.dot.set("idle")
+        self.fps_lbl.config(text="Idle")
+
+    def copy_url(self):
+        if self.bridge_url:
+            self.clipboard_clear()
+            self.clipboard_append(self.bridge_url)
+            self.update()
+            messagebox.showinfo("Link Copied!", f"Global Bridge Link copied:\n\n{self.bridge_url}\n\nPaste this in your phone app!")
+
+    def poll(self):
+        if not self.running or not self.backend: return
+        try:
+            while True:
+                ev, val = self.backend.status_queue.get_nowait()
+                if ev == "connected":
+                    self.dot.set("ok")
+                elif ev == "ready":
+                    self.bridge_url = val
+                    self.url_lbl.config(text=val)
+                    self.btn_copy.pack(side=tk.LEFT, padx=4)
+                elif ev == "fps":
+                    self.fps_lbl.config(text=f"{val} FPS")
+                elif ev == "error":
+                    self.dot.set("error")
+                    self.fps_lbl.config(text="Error")
+        except queue.Empty: pass
+
+        latest_frame = None
+        while True:
+            try:
+                latest_frame = self.backend.frame_queue.get_nowait()
+            except queue.Empty:
+                break
+        if latest_frame is not None:
+            self.video.show_frame(latest_frame)
+
+        self.after(15, self.poll)
+
+
+class MultiBridgeScreen(tk.Frame):
+    def __init__(self, app):
+        super().__init__(app, bg=BG)
+        self._app = app
+        self._cells = []
+        self._build()
+
+    def _build(self):
+        bar = tk.Frame(self, bg=CARD, height=52); bar.pack(fill=tk.X); bar.pack_propagate(False)
+        RoundedButton(bar, text="← Back", command=self._back, bg_color=PANEL, hover_color=BORDER, fg_color=FG).pack(side=tk.LEFT, padx=16)
+        tk.Label(bar, text="🖥️ Multi-Bridge Command Center (4-Camera Grid)", font=_font(14, "bold"), fg=FG, bg=CARD).pack(side=tk.LEFT)
+        _sep(self, fill=tk.X)
+
+        grid_frame = tk.Frame(self, bg=BG); grid_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        grid_frame.columnconfigure(0, weight=1); grid_frame.columnconfigure(1, weight=1)
+        grid_frame.rowconfigure(0, weight=1); grid_frame.rowconfigure(1, weight=1)
+
+        ports = [9001, 9002, 9003, 9004]
+        for idx in range(4):
+            r, c = divmod(idx, 2)
+            cell = MultiBridgeCell(grid_frame, title=f"Camera {idx+1}", default_port=ports[idx])
+            cell.grid(row=r, column=c, sticky="nsew", padx=6, pady=6)
+            self._cells.append(cell)
+
+    def _back(self):
+        for cell in self._cells:
+            cell.stop()
+        self._app.show_home()
+
+
 class VideoRelayApp(tk.Tk):
     def __init__(self):
         super().__init__(); self.title("Live Video Relay"); self.geometry("960x640"); self.configure(bg=BG)
@@ -788,5 +933,6 @@ class VideoRelayApp(tk.Tk):
     def show_home(self): self._switch(HomeScreen(self))
     def show_sender(self): self._switch(SenderScreen(self))
     def show_receiver(self): self._switch(ReceiverScreen(self))
+    def show_multibridge(self): self._switch(MultiBridgeScreen(self))
 
 if __name__ == "__main__": VideoRelayApp().mainloop()

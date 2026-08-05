@@ -1,38 +1,27 @@
-# Build Android APK Plan
+# High FPS Optimization for Global Bridge
 
-The goal is to prepare the project for building a native Android APK while maintaining all existing functionality. The project currently uses a Capacitor-based architecture for the Android app.
+This plan addresses the low 1 FPS issue by optimizing data throughput and relaxing congestion constraints for high-latency long-distance connections.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> The final step of compiling the APK needs to be performed in **Android Studio** on your machine. I have prepared the entire project structure, synchronized assets, and configured the build scripts, but the automated environment restricts the final Gradle execution for keystore generation.
+> I will be reducing the default streaming resolution to **320x240** for Global Mode. This significantly reduces data size, which is the only way to reach 10-15 FPS on a free Cloudflare tunnel over long distances.
 
 ## Proposed Changes
 
-### Android App Preparation
+### 1. Android App High-Speed Mode (`js/app.js`)
 
-#### [MODIFY] [capacitor.config.json](file:///E:/Projects/Live-video-streamer-via-network-feature-internet-mode/Live-video-streamer-via-network-feature-internet-mode/android-app/capacitor.config.json)
-- Updated `webDir` from `.` to `www` to comply with Capacitor requirements for native builds.
+#### [MODIFY] `_sendFrames` logic
+- **Reduce Data Weight**: Drop resolution to 320x240 and JPEG quality to 0.35.
+- **Increase Buffer**: Raise the `bufferedAmount` threshold from 256KB to **1MB**. This allows more frames to be "in flight" across the globe simultaneously.
+- **Eager Loop**: Change `setTimeout` to **10ms** (effectively "as fast as possible") as long as the 1MB buffer isn't full. The network will naturally pace the FPS.
 
-#### [NEW] [www folder](file:///E:/Projects/Live-video-streamer-via-network-feature-internet-mode/Live-video-streamer-via-network-feature-internet-mode/android-app/www)
-- Created a dedicated web assets folder containing `index.html`, `js/`, `css/`, and `manifest.json`.
-
-#### [MODIFY] [gradle-wrapper.properties](file:///E:/Projects/Live-video-streamer-via-network-feature-internet-mode/Live-video-streamer-via-network-feature-internet-mode/android-app/android/gradle/wrapper/gradle-wrapper.properties)
-- Upgraded Gradle to **8.4** to support the **Java 21** environment found on the system.
-
-#### [MODIFY] [variables.gradle](file:///E:/Projects/Live-video-streamer-via-network-feature-internet-mode/Live-video-streamer-via-network-feature-internet-mode/android-app/android/variables.gradle)
-- Updated `compileSdkVersion` and `targetSdkVersion` to **35** to match the installed Android SDK.
-
-#### [NEW] [local.properties](file:///E:/Projects/Live-video-streamer-via-network-feature-internet-mode/Live-video-streamer-via-network-feature-internet-mode/android-app/android/local.properties)
-- Configured the Android SDK path: `E:\Android Studio\Android Studio`.
-
-#### [NEW] [debug.keystore](file:///E:/Projects/Live-video-streamer-via-network-feature-internet-mode/Live-video-streamer-via-network-feature-internet-mode/android-app/android/app/debug.keystore)
-- Manually generated a debug keystore and configured `app/build.gradle` to use it for signing.
+### 2. UI Feedback
+- Update the status text on the phone to show "Sending..." vs "Buffered" so you can see if the network is the bottleneck.
 
 ## Verification Plan
 
 ### Manual Verification
-1. Open the project in Android Studio.
-2. Select the `app` module.
-3. Click **Build > Build Bundle(s) / APK(s) > Build APK(s)**.
-4. The generated APK will be located at `android-app/android/app/build/outputs/apk/debug/app-debug.apk`.
+1. Rebuild and install APK.
+2. Test on mobile data.
+3. Observe the FPS counter on the PC. It should now reach 10-15 FPS even on moderate signals.
